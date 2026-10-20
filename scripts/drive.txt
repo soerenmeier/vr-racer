@@ -1,9 +1,9 @@
-# Drive forward, then turn right while recording. Starts after 2 seconds
-# so the model and shaders have loaded.
-2.0 screenshot start
-2.0 press W
-3.5 press D
-3.5 record turn 2 5
-5.5 release D
-6.0 screenshot end
-6.5 exit
+# Drive forward, then turn right while recording. Starts after 4 seconds
+# so the models and shaders have loaded.
+4.0 screenshot start
+4.0 press W
+5.5 press D
+5.5 record turn 2 5
+7.5 release D
+8.0 screenshot end
+8.5 exit

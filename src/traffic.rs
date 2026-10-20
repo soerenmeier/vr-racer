@@ -1,0 +1,91 @@
+//! Cars driving along the highway at a steady speed per lane, slower on
+//! the right, for the player to overtake.
+
+use avian3d::prelude::*;
+use bevy::prelude::*;
+
+use crate::highway::{LANES, ROAD_LENGTH, lane_x};
+
+struct TrafficModel {
+	path: &'static str,
+	/// Width, height and length in metres, for the collider.
+	size: Vec3,
+}
+
+/// Prepared in Blender: scaled to metres, centred, on the ground, facing -Z.
+const MODELS: [TrafficModel; 3] = [
+	TrafficModel {
+		path: "models/traffic/ford_bronco.glb",
+		size: Vec3::new(2.19, 1.98, 4.81),
+	},
+	TrafficModel {
+		path: "models/traffic/fiat_500_abarth.glb",
+		size: Vec3::new(1.9, 1.52, 3.66),
+	},
+	TrafficModel {
+		path: "models/traffic/toyota_hilux.glb",
+		size: Vec3::new(2.23, 1.98, 5.33),
+	},
+];
+
+/// Speed of each lane in km/h, from the right lane to the left.
+const LANE_SPEEDS: [f32; LANES] = [80.0, 100.0, 120.0];
+const CARS_PER_LANE: usize = 320;
+/// Distance from the start to the first car.
+const FIRST_CAR: f32 = 60.0;
+
+pub struct TrafficPlugin;
+
+impl Plugin for TrafficPlugin {
+	fn build(&self, app: &mut App) {
+		app.add_systems(Startup, spawn_traffic)
+			.add_systems(FixedUpdate, remove_at_road_end);
+	}
+}
+
+#[derive(Component)]
+struct TrafficCar;
+
+fn spawn_traffic(mut commands: Commands, asset_server: Res<AssetServer>) {
+	let scenes = MODELS.map(|model| {
+		asset_server.load(GltfAssetLabel::Scene(0).from_asset(model.path))
+	});
+	let spacing = ROAD_LENGTH / CARS_PER_LANE as f32;
+
+	for (lane, speed) in LANE_SPEEDS.into_iter().enumerate() {
+		for i in 0..CARS_PER_LANE {
+			let model = (i + lane) % MODELS.len();
+			let size = MODELS[model].size;
+
+			// Stagger the lanes so cars don't drive side by side.
+			let z = -(FIRST_CAR + (i as f32 + lane as f32 / 3.0) * spacing);
+
+			commands.spawn((
+				TrafficCar,
+				RigidBody::Kinematic,
+				LinearVelocity(Vec3::NEG_Z * speed / 3.6),
+				Collider::compound(vec![(
+					Vec3::Y * size.y / 2.0,
+					Quat::IDENTITY,
+					Collider::cuboid(size.x, size.y, size.z),
+				)]),
+				TransformInterpolation,
+				Transform::from_xyz(lane_x(lane), 0.0, z),
+				WorldAssetRoot(scenes[model].clone()),
+			));
+		}
+	}
+}
+
+/// Cars that reach the end of the highway leave. They don't start over at
+/// the beginning, as they could land on top of the player.
+fn remove_at_road_end(
+	cars: Query<(Entity, &Position), With<TrafficCar>>,
+	mut commands: Commands,
+) {
+	for (entity, position) in &cars {
+		if position.z < -ROAD_LENGTH {
+			commands.entity(entity).despawn();
+		}
+	}
+}

@@ -185,6 +185,9 @@ fn parse(text: &str) -> Result<Vec<Step>, String> {
 		});
 	}
 
+	// Steps run in time order, whatever order the lines are in.
+	steps.sort_by(|a, b| a.at.total_cmp(&b.at));
+
 	Ok(steps)
 }
 

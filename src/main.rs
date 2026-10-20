@@ -1,7 +1,8 @@
 mod camera;
 mod car;
+mod highway;
 mod script;
-mod world;
+mod traffic;
 
 use avian3d::prelude::*;
 use bevy::prelude::*;
@@ -11,7 +12,8 @@ fn main() {
 		.add_plugins((
 			DefaultPlugins,
 			PhysicsPlugins::default(),
-			world::WorldPlugin,
+			highway::HighwayPlugin,
+			traffic::TrafficPlugin,
 			car::CarPlugin,
 			camera::CameraPlugin,
 			script::ScriptPlugin,
