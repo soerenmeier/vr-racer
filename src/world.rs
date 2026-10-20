@@ -1,3 +1,4 @@
+use avian3d::prelude::*;
 use bevy::prelude::*;
 
 const GROUND_SIZE: f32 = 400.0;
@@ -20,6 +21,8 @@ fn spawn_ground(
 	mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
 	commands.spawn((
+		RigidBody::Static,
+		Collider::half_space(Vec3::Y),
 		Mesh3d(
 			meshes
 				.add(Plane3d::default().mesh().size(GROUND_SIZE, GROUND_SIZE)),
@@ -34,7 +37,8 @@ fn spawn_markers(
 	mut meshes: ResMut<Assets<Mesh>>,
 	mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-	let mesh = meshes.add(Cuboid::new(0.3, 1.0, 0.3));
+	let size = Vec3::new(0.3, 1.0, 0.3);
+	let mesh = meshes.add(Cuboid::from_size(size));
 	let material = materials.add(Color::srgb(0.95, 0.6, 0.1));
 
 	// Offset by half a spacing so no post stands at the origin, where the
@@ -43,6 +47,8 @@ fn spawn_markers(
 	for x in 0..MARKERS_PER_SIDE {
 		for z in 0..MARKERS_PER_SIDE {
 			commands.spawn((
+				RigidBody::Static,
+				Collider::cuboid(size.x, size.y, size.z),
 				Mesh3d(mesh.clone()),
 				MeshMaterial3d(material.clone()),
 				Transform::from_xyz(
