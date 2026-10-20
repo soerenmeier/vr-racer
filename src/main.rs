@@ -1,5 +1,6 @@
 mod camera;
 mod car;
+mod script;
 mod world;
 
 use bevy::prelude::*;
@@ -11,6 +12,7 @@ fn main() {
 			world::WorldPlugin,
 			car::CarPlugin,
 			camera::CameraPlugin,
+			script::ScriptPlugin,
 		))
 		.run();
 }

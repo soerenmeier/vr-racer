@@ -50,6 +50,21 @@ releases: check the docs and migration guides for the version in
   and why (a list for several changes).
 - Only commit code that builds and passes `cargo test`.
 
+## Seeing the game
+
+You can't see the window, so test visual changes with a script (format in
+`src/script.rs`, example in `scripts/`). It plays timed inputs on a fixed
+60 Hz clock, saves frames to `screenshots/` and exits:
+
+	cargo run -- --script scripts/drive.txt
+
+Turn a recording into one image you can look at, or a video for the user:
+
+	ffmpeg -y -i screenshots/turn-%03d.png -vf "scale=480:-1,tile=5x2" screenshots/turn-sheet.png
+	ffmpeg -y -framerate 5 -i screenshots/turn-%03d.png -pix_fmt yuv420p screenshots/turn.mp4
+
+The game must not already be running, or cargo can't replace the exe.
+
 ## Building
 
 - Local development: `cargo run --features dev`

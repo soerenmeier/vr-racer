@@ -1,0 +1,8 @@
+# Drive forward, then turn right while recording.
+0.5 screenshot start
+0.5 press W
+2.0 press D
+2.0 record turn 2 5
+4.0 release D
+4.5 screenshot end
+5.0 exit
