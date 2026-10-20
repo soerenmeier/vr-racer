@@ -33,7 +33,8 @@ releases: check the docs and migration guides for the version in
 - Tunable gameplay values (speeds, sizes, timings) are named consts or a
   resource at the top of the module, never inline magic numbers.
 - Assets live in `assets/` and are loaded through the `AssetServer`, never
-  with hard-coded absolute paths.
+  with hard-coded absolute paths. Credit third-party assets in
+  `assets/CREDITS.md`.
 - Use `Time` (`time.delta_secs()`) for all movement and timers so nothing
   depends on frame rate.
 
