@@ -1,19 +1,26 @@
 use bevy::prelude::*;
 
-const CAMERA_START: Vec3 = Vec3::new(0.0, 4.0, 10.0);
+use crate::car::DriverHead;
+
+const FIELD_OF_VIEW: f32 = 70.0_f32.to_radians();
 
 pub struct CameraPlugin;
 
 impl Plugin for CameraPlugin {
 	fn build(&self, app: &mut App) {
-		app.add_systems(Startup, spawn_camera);
+		app.add_observer(attach_camera);
 	}
 }
 
-fn spawn_camera(mut commands: Commands) {
+/// Puts the camera at the driver's eyes, so it moves with the car.
+fn attach_camera(add: On<Add<DriverHead>>, mut commands: Commands) {
 	commands.spawn((
 		Camera3d::default(),
-		Transform::from_translation(CAMERA_START)
-			.looking_at(Vec3::ZERO, Vec3::Y),
+		Projection::Perspective(PerspectiveProjection {
+			fov: FIELD_OF_VIEW,
+			..default()
+		}),
+		Transform::default(),
+		ChildOf(add.entity),
 	));
 }
