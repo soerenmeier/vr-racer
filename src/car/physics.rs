@@ -28,6 +28,12 @@ const MAX_STEER_ANGLE: f32 = 35.0_f32.to_radians();
 const TYRE_GRIP: f32 = 1.0;
 /// Slip angle at which a tyre gives its full sideways grip.
 const PEAK_SLIP_ANGLE: f32 = 8.0_f32.to_radians();
+/// How far behind the steering axis the front tyres' sideways force acts,
+/// which turns it into the torque that pulls the steering straight. The
+/// pneumatic part fades as a tyre nears its grip limit, so the steering
+/// goes light when the front starts to slide.
+const MECHANICAL_TRAIL: f32 = 0.02;
+const PNEUMATIC_TRAIL: f32 = 0.04;
 /// Below this speed, slip angles are measured as if going this fast, so
 /// the tyres don't jitter when the car is almost stopped.
 const LOW_SPEED: f32 = 3.0;
@@ -80,6 +86,12 @@ impl Plugin for CarPhysicsPlugin {
 	}
 }
 
+/// The torque the front tyres put on the steering, in Nm around the
+/// steering axes. Positive turns the steering right. Force feedback plays
+/// it on the wheel.
+#[derive(Component, Default)]
+pub struct SteeringTorque(pub f32);
+
 pub(super) fn chassis() -> impl Bundle {
 	(
 		RigidBody::Dynamic,
@@ -90,6 +102,7 @@ pub(super) fn chassis() -> impl Bundle {
 		NoAutoCenterOfMass,
 		NoAutoAngularInertia,
 		TransformInterpolation,
+		SteeringTorque::default(),
 		// So the race can count hits.
 		CollisionEventsEnabled,
 		// On the chassis itself rather than a child, so the wheel rays can
@@ -104,9 +117,12 @@ pub(super) fn chassis() -> impl Bundle {
 
 fn apply_wheel_forces(
 	spatial: SpatialQuery,
-	mut cars: Query<(Entity, Forces, &CarInput), With<Car>>,
+	mut cars: Query<
+		(Entity, Forces, &CarInput, &mut SteeringTorque),
+		With<Car>,
+	>,
 ) {
-	for (entity, mut forces, input) in &mut cars {
+	for (entity, mut forces, input, mut steering_torque) in &mut cars {
 		let rotation = forces.rotation();
 		let up = rotation * Vec3::Y;
 		let filter = SpatialQueryFilter::from_excluded_entities([entity]);
@@ -114,6 +130,7 @@ fn apply_wheel_forces(
 		let forward_speed =
 			forces.linear_velocity().dot(rotation * Vec3::NEG_Z);
 		let drive = input.throttle * drive_force(forward_speed);
+		steering_torque.0 = 0.0;
 
 		for wheel in &WHEELS {
 			let mount = forces.position() + rotation * wheel.mount;
@@ -151,8 +168,8 @@ fn apply_wheel_forces(
 			if wheel.driven {
 				longitudinal += drive / DRIVEN_WHEELS;
 			}
-			let lateral =
-				lateral_force(velocity.dot(side), forward_velocity, load);
+			let slip_angle = slip_angle(velocity.dot(side), forward_velocity);
+			let lateral = lateral_force(slip_angle, load);
 			let (longitudinal, lateral) =
 				limit_to_grip(longitudinal, lateral, load);
 
@@ -162,6 +179,10 @@ fn apply_wheel_forces(
 				hit.normal * load + forward * longitudinal + side * lateral,
 				contact,
 			);
+
+			if wheel.steered {
+				steering_torque.0 += aligning_torque(lateral, slip_angle);
+			}
 		}
 
 		let velocity = forces.linear_velocity();
@@ -186,11 +207,23 @@ fn opposing(velocity: f32, max: f32) -> f32 {
 	-max * (velocity / STOP_SPEED).clamp(-1.0, 1.0)
 }
 
-/// Sideways tyre force: grows with the slip angle up to the tyre's grip.
-fn lateral_force(side_velocity: f32, forward_velocity: f32, load: f32) -> f32 {
-	let slip_angle = side_velocity.atan2(forward_velocity.abs().max(LOW_SPEED));
+/// The angle between where a tyre points and where it is going.
+fn slip_angle(side_velocity: f32, forward_velocity: f32) -> f32 {
+	side_velocity.atan2(forward_velocity.abs().max(LOW_SPEED))
+}
 
+/// Sideways tyre force: grows with the slip angle up to the tyre's grip.
+fn lateral_force(slip_angle: f32, load: f32) -> f32 {
 	-load * TYRE_GRIP * (slip_angle / PEAK_SLIP_ANGLE).clamp(-1.0, 1.0)
+}
+
+/// The torque a front tyre's sideways force puts on the steering. It
+/// always turns the tyre back towards where the car is going.
+fn aligning_torque(lateral: f32, slip_angle: f32) -> f32 {
+	let grip_used = (slip_angle.abs() / PEAK_SLIP_ANGLE).min(1.0);
+	let trail = MECHANICAL_TRAIL + PNEUMATIC_TRAIL * (1.0 - grip_used);
+
+	-lateral * trail
 }
 
 /// A tyre can't give more total force than its grip, so scale both
@@ -239,11 +272,33 @@ mod tests {
 
 	#[test]
 	fn tyres_resist_sliding_up_to_their_grip() {
-		assert!(lateral_force(1.0, 20.0, 4000.0) < 0.0);
-		assert_eq!(lateral_force(-50.0, 20.0, 4000.0), 4000.0 * TYRE_GRIP);
+		assert!(lateral_force(slip_angle(1.0, 20.0), 4000.0) < 0.0);
+		assert_eq!(
+			lateral_force(slip_angle(-50.0, 20.0), 4000.0),
+			4000.0 * TYRE_GRIP
+		);
 
 		let (x, y) = limit_to_grip(3000.0, 4000.0, 2500.0);
 		assert!((x.hypot(y) - 2500.0 * TYRE_GRIP).abs() < 0.01);
+	}
+
+	#[test]
+	fn steering_lightens_when_the_front_slides() {
+		let gripping = slip_angle(-1.0, 20.0);
+		let sliding = slip_angle(-15.0, 20.0);
+
+		// Turning right: the tyre pushes right and the steering back left.
+		let torque = aligning_torque(lateral_force(gripping, 4000.0), gripping);
+		assert!(torque < 0.0);
+
+		let at_limit =
+			aligning_torque(lateral_force(sliding, 4000.0), sliding).abs();
+		let near_limit = aligning_torque(
+			lateral_force(PEAK_SLIP_ANGLE * 0.6, 4000.0),
+			PEAK_SLIP_ANGLE * 0.6,
+		)
+		.abs();
+		assert!(at_limit < near_limit);
 	}
 
 	/// Runs a car on flat ground for `seconds` with the given input, and

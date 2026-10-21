@@ -75,6 +75,9 @@ The game must not already be running, or cargo can't replace the exe.
   from you, and add the author to `assets/CREDITS.md`.
 - `cargo run --example input_probe` logs a controller's raw axes and
   buttons, to see how a wheel or pedals map (see `src/car/input.rs`).
+- `cargo run --example ffb_probe` checks force feedback: it pushes the
+  wheel briefly each way and prints which way it turned. Ask the user to
+  keep their hands off the wheel first.
 - `tools/measure_cockpit.py` finds points in the cockpit in car space by
   casting rays through screenshot pixels, for placing things in the car.
 

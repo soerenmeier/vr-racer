@@ -2,6 +2,7 @@ mod input;
 mod physics;
 
 pub use input::THRUSTMASTER;
+pub use physics::SteeringTorque;
 
 use std::f32::consts::PI;
 
