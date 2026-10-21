@@ -32,6 +32,9 @@ releases: check the docs and migration guides for the version in
   shared mutable resources.
 - Tunable gameplay values (speeds, sizes, timings) are named consts or a
   resource at the top of the module, never inline magic numbers.
+  Values to tune by feel (car handling, force feedback) go in a tuning
+  resource shown in the F1 panel (`src/tuning.rs`) and saved in
+  `tuning.ron`.
 - Assets live in `assets/` and are loaded through the `AssetServer`, never
   with hard-coded absolute paths. Credit third-party assets in
   `assets/CREDITS.md`.

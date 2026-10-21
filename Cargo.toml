@@ -6,6 +6,10 @@ edition = "2024"
 [dependencies]
 avian3d = "0.8.0"
 bevy = { version = "0.20.0", features = ["jpeg"] }
+bevy-inspector-egui = { version = "0.38.0", features = ["documentation"] }
+bevy_egui = "0.43.1"
+ron = "0.12.2"
+serde = { version = "1.0.229", features = ["derive"] }
 
 [target.'cfg(windows)'.dependencies]
 # Force feedback for racing wheels, through Windows.Gaming.Input.

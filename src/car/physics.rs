@@ -4,6 +4,8 @@
 
 use avian3d::prelude::*;
 use bevy::prelude::*;
+use bevy_inspector_egui::prelude::*;
+use serde::{Deserialize, Serialize};
 
 use super::{Car, CarInput};
 
@@ -18,34 +20,83 @@ const BODY_CENTER: Vec3 = Vec3::new(0.0, 0.8, 0.0);
 
 const WHEEL_RADIUS: f32 = 0.354;
 const SUSPENSION_LENGTH: f32 = 0.3;
-const SPRING_STIFFNESS: f32 = 46_000.0;
-const SPRING_DAMPING: f32 = 3300.0;
 /// Height of the suspension mounts above the bottom of the car.
 const MOUNT_HEIGHT: f32 = 0.62;
 
-const MAX_STEER_ANGLE: f32 = 35.0_f32.to_radians();
-/// Friction coefficient: the most force a tyre gives per newton of load.
-const TYRE_GRIP: f32 = 1.0;
-/// Slip angle at which a tyre gives its full sideways grip.
-const PEAK_SLIP_ANGLE: f32 = 8.0_f32.to_radians();
-/// How far behind the steering axis the front tyres' sideways force acts,
-/// which turns it into the torque that pulls the steering straight. The
-/// pneumatic part fades as a tyre nears its grip limit, so the steering
-/// goes light when the front starts to slide.
-const MECHANICAL_TRAIL: f32 = 0.02;
-const PNEUMATIC_TRAIL: f32 = 0.04;
 /// Below this speed, slip angles are measured as if going this fast, so
 /// the tyres don't jitter when the car is almost stopped.
 const LOW_SPEED: f32 = 3.0;
 
-const DRIVE_FORCE: f32 = 8000.0;
-const ENGINE_POWER: f32 = 330_000.0;
-const BRAKE_FORCE: f32 = 16_000.0;
-const ROLLING_RESISTANCE: f32 = 0.015;
 /// Brakes and rolling resistance fade out below this speed, so they stop
 /// the car instead of pushing it back and forth.
 const STOP_SPEED: f32 = 0.5;
-const AIR_DRAG: f32 = 0.4;
+
+/// How the car drives. Tuned in the tuning panel (F1) and saved to
+/// tuning.ron.
+#[derive(
+	Resource, Reflect, InspectorOptions, Serialize, Deserialize, Clone,
+)]
+#[reflect(Resource, InspectorOptions)]
+#[serde(default)]
+pub struct CarTuning {
+	/// Full-throttle force at low speed, in N.
+	#[inspector(min = 0.0, max = 20_000.0)]
+	pub drive_force: f32,
+	/// Limits the drive force at speed, in W.
+	#[inspector(min = 0.0, max = 1_000_000.0)]
+	pub engine_power: f32,
+	/// All four brakes together, in N.
+	#[inspector(min = 0.0, max = 40_000.0)]
+	pub brake_force: f32,
+	/// Friction coefficient: the most force a tyre gives per newton of load.
+	#[inspector(min = 0.1, max = 2.0)]
+	pub tyre_grip: f32,
+	/// Slip angle at which a tyre gives its full sideways grip, in degrees.
+	#[inspector(min = 1.0, max = 20.0)]
+	pub peak_slip_angle: f32,
+	/// Front wheel angle at full lock, in degrees.
+	#[inspector(min = 5.0, max = 45.0)]
+	pub max_steer_angle: f32,
+	/// How far behind the steering axis the front tyres' sideways force
+	/// acts, in m. It turns into the torque that pulls the steering
+	/// straight. The pneumatic part fades as a tyre nears its grip limit, so
+	/// the steering goes light when the front starts to slide.
+	#[inspector(min = 0.0, max = 0.1)]
+	pub mechanical_trail: f32,
+	#[inspector(min = 0.0, max = 0.1)]
+	pub pneumatic_trail: f32,
+	/// Per wheel, in N/m.
+	#[inspector(min = 10_000.0, max = 150_000.0)]
+	pub spring_stiffness: f32,
+	/// Per wheel, in N s/m.
+	#[inspector(min = 0.0, max = 15_000.0)]
+	pub spring_damping: f32,
+	/// Share of a tyre's load that slows it down while rolling.
+	#[inspector(min = 0.0, max = 0.1)]
+	pub rolling_resistance: f32,
+	/// Air drag in N, per (m/s) squared.
+	#[inspector(min = 0.0, max = 2.0)]
+	pub air_drag: f32,
+}
+
+impl Default for CarTuning {
+	fn default() -> Self {
+		Self {
+			drive_force: 8000.0,
+			engine_power: 330_000.0,
+			brake_force: 16_000.0,
+			tyre_grip: 1.0,
+			peak_slip_angle: 8.0,
+			max_steer_angle: 35.0,
+			mechanical_trail: 0.02,
+			pneumatic_trail: 0.04,
+			spring_stiffness: 46_000.0,
+			spring_damping: 3300.0,
+			rolling_resistance: 0.015,
+			air_drag: 0.4,
+		}
+	}
+}
 
 struct Wheel {
 	mount: Vec3,
@@ -82,7 +133,9 @@ pub(super) struct CarPhysicsPlugin;
 
 impl Plugin for CarPhysicsPlugin {
 	fn build(&self, app: &mut App) {
-		app.add_systems(FixedUpdate, apply_wheel_forces);
+		app.init_resource::<CarTuning>()
+			.register_type::<CarTuning>()
+			.add_systems(FixedUpdate, apply_wheel_forces);
 	}
 }
 
@@ -116,6 +169,7 @@ pub(super) fn chassis() -> impl Bundle {
 }
 
 fn apply_wheel_forces(
+	tuning: Res<CarTuning>,
 	spatial: SpatialQuery,
 	mut cars: Query<
 		(Entity, Forces, &CarInput, &mut SteeringTorque),
@@ -129,7 +183,7 @@ fn apply_wheel_forces(
 
 		let forward_speed =
 			forces.linear_velocity().dot(rotation * Vec3::NEG_Z);
-		let drive = input.throttle * drive_force(forward_speed);
+		let drive = input.throttle * drive_force(&tuning, forward_speed);
 		steering_torque.0 = 0.0;
 
 		for wheel in &WHEELS {
@@ -147,11 +201,15 @@ fn apply_wheel_forces(
 			let contact = mount - up * hit.distance;
 			let velocity = forces.velocity_at_point(contact);
 			let compression = SUSPENSION_LENGTH + WHEEL_RADIUS - hit.distance;
-			let load = suspension_force(compression, velocity.dot(hit.normal));
+			let load = suspension_force(
+				&tuning,
+				compression,
+				velocity.dot(hit.normal),
+			);
 
 			// Positive steer turns right, which is a negative turn around Y.
 			let steer = if wheel.steered {
-				-input.steer * MAX_STEER_ANGLE
+				-input.steer * tuning.max_steer_angle.to_radians()
 			} else {
 				0.0
 			};
@@ -162,16 +220,16 @@ fn apply_wheel_forces(
 
 			let mut longitudinal = opposing(
 				forward_velocity,
-				input.brake * BRAKE_FORCE / WHEELS.len() as f32
-					+ ROLLING_RESISTANCE * load,
+				input.brake * tuning.brake_force / WHEELS.len() as f32
+					+ tuning.rolling_resistance * load,
 			);
 			if wheel.driven {
 				longitudinal += drive / DRIVEN_WHEELS;
 			}
 			let slip_angle = slip_angle(velocity.dot(side), forward_velocity);
-			let lateral = lateral_force(slip_angle, load);
+			let lateral = lateral_force(&tuning, slip_angle, load);
 			let (longitudinal, lateral) =
-				limit_to_grip(longitudinal, lateral, load);
+				limit_to_grip(&tuning, longitudinal, lateral, load);
 
 			forces.apply_force_at_point(
 				// The ground pushes back along its normal, not the car's up,
@@ -181,24 +239,33 @@ fn apply_wheel_forces(
 			);
 
 			if wheel.steered {
-				steering_torque.0 += aligning_torque(lateral, slip_angle);
+				steering_torque.0 +=
+					aligning_torque(&tuning, lateral, slip_angle);
 			}
 		}
 
 		let velocity = forces.linear_velocity();
-		forces.apply_force(-velocity * velocity.length() * AIR_DRAG);
+		forces.apply_force(-velocity * velocity.length() * tuning.air_drag);
 	}
 }
 
 /// The engine's full-throttle drive force. Its power limits the force at
 /// speed.
-fn drive_force(forward_speed: f32) -> f32 {
-	DRIVE_FORCE.min(ENGINE_POWER / forward_speed.max(1.0))
+fn drive_force(tuning: &CarTuning, forward_speed: f32) -> f32 {
+	tuning
+		.drive_force
+		.min(tuning.engine_power / forward_speed.max(1.0))
 }
 
 /// Spring and damper force pushing the chassis up. A spring can only push.
-fn suspension_force(compression: f32, up_velocity: f32) -> f32 {
-	(compression * SPRING_STIFFNESS - up_velocity * SPRING_DAMPING).max(0.0)
+fn suspension_force(
+	tuning: &CarTuning,
+	compression: f32,
+	up_velocity: f32,
+) -> f32 {
+	(compression * tuning.spring_stiffness
+		- up_velocity * tuning.spring_damping)
+		.max(0.0)
 }
 
 /// A friction force of up to `max` against `velocity`, fading out near
@@ -213,23 +280,32 @@ fn slip_angle(side_velocity: f32, forward_velocity: f32) -> f32 {
 }
 
 /// Sideways tyre force: grows with the slip angle up to the tyre's grip.
-fn lateral_force(slip_angle: f32, load: f32) -> f32 {
-	-load * TYRE_GRIP * (slip_angle / PEAK_SLIP_ANGLE).clamp(-1.0, 1.0)
+fn lateral_force(tuning: &CarTuning, slip_angle: f32, load: f32) -> f32 {
+	let peak = tuning.peak_slip_angle.to_radians();
+
+	-load * tuning.tyre_grip * (slip_angle / peak).clamp(-1.0, 1.0)
 }
 
 /// The torque a front tyre's sideways force puts on the steering. It
 /// always turns the tyre back towards where the car is going.
-fn aligning_torque(lateral: f32, slip_angle: f32) -> f32 {
-	let grip_used = (slip_angle.abs() / PEAK_SLIP_ANGLE).min(1.0);
-	let trail = MECHANICAL_TRAIL + PNEUMATIC_TRAIL * (1.0 - grip_used);
+fn aligning_torque(tuning: &CarTuning, lateral: f32, slip_angle: f32) -> f32 {
+	let peak = tuning.peak_slip_angle.to_radians();
+	let grip_used = (slip_angle.abs() / peak).min(1.0);
+	let trail =
+		tuning.mechanical_trail + tuning.pneumatic_trail * (1.0 - grip_used);
 
 	-lateral * trail
 }
 
 /// A tyre can't give more total force than its grip, so scale both
 /// directions down together when they ask for more.
-fn limit_to_grip(longitudinal: f32, lateral: f32, load: f32) -> (f32, f32) {
-	let max = load * TYRE_GRIP;
+fn limit_to_grip(
+	tuning: &CarTuning,
+	longitudinal: f32,
+	lateral: f32,
+	load: f32,
+) -> (f32, f32) {
+	let max = load * tuning.tyre_grip;
 	let total = longitudinal.hypot(lateral);
 
 	if total <= max {
@@ -260,45 +336,48 @@ mod tests {
 
 	#[test]
 	fn engine_power_limits_drive_at_speed() {
-		assert_eq!(drive_force(0.0), DRIVE_FORCE);
-		assert_eq!(drive_force(100.0), ENGINE_POWER / 100.0);
+		let tuning = CarTuning::default();
+
+		assert_eq!(drive_force(&tuning, 0.0), tuning.drive_force);
+		assert_eq!(drive_force(&tuning, 100.0), tuning.engine_power / 100.0);
 	}
 
 	#[test]
 	fn spring_only_pushes() {
-		assert!(suspension_force(0.1, 0.0) > 0.0);
-		assert_eq!(suspension_force(0.0, 1.0), 0.0);
+		let tuning = CarTuning::default();
+
+		assert!(suspension_force(&tuning, 0.1, 0.0) > 0.0);
+		assert_eq!(suspension_force(&tuning, 0.0, 1.0), 0.0);
 	}
 
 	#[test]
 	fn tyres_resist_sliding_up_to_their_grip() {
-		assert!(lateral_force(slip_angle(1.0, 20.0), 4000.0) < 0.0);
+		let tuning = CarTuning::default();
+		let grip = 4000.0 * tuning.tyre_grip;
+
+		assert!(lateral_force(&tuning, slip_angle(1.0, 20.0), 4000.0) < 0.0);
 		assert_eq!(
-			lateral_force(slip_angle(-50.0, 20.0), 4000.0),
-			4000.0 * TYRE_GRIP
+			lateral_force(&tuning, slip_angle(-50.0, 20.0), 4000.0),
+			grip
 		);
 
-		let (x, y) = limit_to_grip(3000.0, 4000.0, 2500.0);
-		assert!((x.hypot(y) - 2500.0 * TYRE_GRIP).abs() < 0.01);
+		let (x, y) = limit_to_grip(&tuning, 3000.0, 4000.0, 2500.0);
+		assert!((x.hypot(y) - 2500.0 * tuning.tyre_grip).abs() < 0.01);
 	}
 
 	#[test]
 	fn steering_lightens_when_the_front_slides() {
-		let gripping = slip_angle(-1.0, 20.0);
-		let sliding = slip_angle(-15.0, 20.0);
+		let tuning = CarTuning::default();
+		let torque = |slip| {
+			aligning_torque(&tuning, lateral_force(&tuning, slip, 4000.0), slip)
+		};
 
 		// Turning right: the tyre pushes right and the steering back left.
-		let torque = aligning_torque(lateral_force(gripping, 4000.0), gripping);
-		assert!(torque < 0.0);
+		assert!(torque(slip_angle(-1.0, 20.0)) < 0.0);
 
-		let at_limit =
-			aligning_torque(lateral_force(sliding, 4000.0), sliding).abs();
-		let near_limit = aligning_torque(
-			lateral_force(PEAK_SLIP_ANGLE * 0.6, 4000.0),
-			PEAK_SLIP_ANGLE * 0.6,
-		)
-		.abs();
-		assert!(at_limit < near_limit);
+		let near_limit = tuning.peak_slip_angle.to_radians() * 0.6;
+		let sliding = slip_angle(-15.0, 20.0);
+		assert!(torque(sliding).abs() < torque(near_limit).abs());
 	}
 
 	/// Runs a car on flat ground for `seconds` with the given input, and

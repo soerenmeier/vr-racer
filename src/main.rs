@@ -7,6 +7,7 @@ mod hud;
 mod race;
 mod script;
 mod traffic;
+mod tuning;
 
 use avian3d::prelude::*;
 use bevy::prelude::*;
@@ -27,6 +28,9 @@ fn main() {
 
 	#[cfg(windows)]
 	app.add_plugins(force_feedback::ForceFeedbackPlugin);
+
+	// After the plugins whose tuning it loads, so the saved values win.
+	app.add_plugins(tuning::TuningPlugin);
 
 	app.run();
 }

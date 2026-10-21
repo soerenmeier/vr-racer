@@ -8,6 +8,8 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use bevy::prelude::*;
+use bevy_inspector_egui::prelude::*;
+use serde::{Deserialize, Serialize};
 use windows::Foundation::TimeSpan;
 use windows::Gaming::Input::ForceFeedback::{
 	ConditionForceEffect, ConditionForceEffectKind, ConstantForceEffect,
@@ -19,12 +21,6 @@ use windows_numerics::Vector3;
 
 use crate::car::{Car, SteeringTorque, THRUSTMASTER};
 
-/// Steering torque in Nm that gives the wheel's full force.
-const FULL_FORCE_TORQUE: f32 = 250.0;
-/// Overall strength, from 0 to 1.
-const GAIN: f32 = 0.7;
-/// Resists fast wheel movements so the wheel has some weight, from 0 to 1.
-const DAMPER: f32 = 0.15;
 /// On the T300, a positive force turns the wheel left.
 const FORCE_TO_TURN_RIGHT: f32 = -1.0;
 
@@ -37,10 +33,49 @@ const FORCE_DURATION: Duration = Duration::from_millis(500);
 const STALE_AFTER: Duration = Duration::from_millis(250);
 const RETRY_AFTER: Duration = Duration::from_secs(1);
 
+/// How strong the force feedback is. Tuned in the tuning panel (F1) and
+/// saved to tuning.ron.
+#[derive(
+	Resource, Reflect, InspectorOptions, Serialize, Deserialize, Clone,
+)]
+#[reflect(Resource, InspectorOptions)]
+#[serde(default)]
+pub struct ForceFeedbackTuning {
+	/// Overall strength, from 0 to 1.
+	#[inspector(min = 0.0, max = 1.0)]
+	pub gain: f32,
+	/// Steering torque in Nm that gives the wheel's full force.
+	#[inspector(min = 20.0, max = 1000.0)]
+	pub full_force_torque: f32,
+	/// Resists fast wheel movements so the wheel has some weight, from 0
+	/// to 1.
+	#[inspector(min = 0.0, max = 1.0)]
+	pub damper: f32,
+}
+
+impl Default for ForceFeedbackTuning {
+	fn default() -> Self {
+		Self {
+			gain: 0.7,
+			full_force_torque: 250.0,
+			damper: 0.15,
+		}
+	}
+}
+
+/// The force for the wheel from the steering torque, from -1 to 1. Positive
+/// turns it right.
+pub fn wheel_force(tuning: &ForceFeedbackTuning, torque: f32) -> f32 {
+	(torque / tuning.full_force_torque * tuning.gain).clamp(-1.0, 1.0)
+}
+
 pub struct ForceFeedbackPlugin;
 
 impl Plugin for ForceFeedbackPlugin {
 	fn build(&self, app: &mut App) {
+		app.init_resource::<ForceFeedbackTuning>()
+			.register_type::<ForceFeedbackTuning>();
+
 		// Scripted test runs shouldn't turn the wheel of whoever sits at it.
 		if std::env::args().any(|arg| arg == "--script") {
 			return;
@@ -55,19 +90,28 @@ impl Plugin for ForceFeedbackPlugin {
 	}
 }
 
-/// The latest force for the wheel (-1 to 1, positive turns it right) and
-/// when it was sent.
-type Latest = Arc<Mutex<Option<(f32, Instant)>>>;
+/// What the game last sent to the wheel thread.
+struct Sent {
+	force: f32,
+	damper: f32,
+	at: Instant,
+}
+
+type Latest = Arc<Mutex<Option<Sent>>>;
 
 #[derive(Resource)]
 struct ForceFeedback(Latest);
 
 fn send_force(
 	force_feedback: Res<ForceFeedback>,
+	tuning: Res<ForceFeedbackTuning>,
 	torque: Single<&SteeringTorque, With<Car>>,
 ) {
-	let force = (torque.0 / FULL_FORCE_TORQUE * GAIN).clamp(-1.0, 1.0);
-	*force_feedback.0.lock().unwrap() = Some((force, Instant::now()));
+	*force_feedback.0.lock().unwrap() = Some(Sent {
+		force: wheel_force(&tuning, torque.0),
+		damper: tuning.damper,
+		at: Instant::now(),
+	});
 }
 
 fn run(latest: &Latest) {
@@ -121,12 +165,8 @@ fn drive(
 
 	let damper =
 		ConditionForceEffect::CreateInstance(ConditionForceEffectKind::Damper)?;
-	damper.SetParameters(along_wheel, DAMPER, DAMPER, 1.0, 1.0, 0.0, 0.0)?;
-	if motor.LoadEffectAsync(&damper)?.join()?
-		== ForceFeedbackLoadEffectResult::Succeeded
-	{
-		damper.Start()?;
-	}
+	let has_damper = motor.LoadEffectAsync(&damper)?.join()?
+		== ForceFeedbackLoadEffectResult::Succeeded;
 
 	let constant = ConstantForceEffect::new()?;
 	if motor.LoadEffectAsync(&constant)?.join()?
@@ -139,11 +179,28 @@ fn drive(
 	let duration = TimeSpan {
 		Duration: FORCE_DURATION.as_nanos() as i64 / 100,
 	};
+	let mut damper_strength = None;
 	loop {
-		let force = match *latest.lock().unwrap() {
-			Some((force, sent)) if sent.elapsed() < STALE_AFTER => force,
-			_ => 0.0,
+		let (force, strength) = match &*latest.lock().unwrap() {
+			Some(sent) if sent.at.elapsed() < STALE_AFTER => {
+				(sent.force, sent.damper)
+			}
+			_ => (0.0, 0.0),
 		};
+
+		if has_damper && damper_strength != Some(strength) {
+			damper.SetParameters(
+				along_wheel,
+				strength,
+				strength,
+				1.0,
+				1.0,
+				0.0,
+				0.0,
+			)?;
+			damper.Start()?;
+			damper_strength = Some(strength);
+		}
 
 		constant.SetParameters(
 			along_wheel * (force * FORCE_TO_TURN_RIGHT),

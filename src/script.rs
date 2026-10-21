@@ -3,7 +3,7 @@
 //! `cargo run --features dev -- --script scripts/drive.txt`.
 //!
 //! Each line is `<seconds> <command>`:
-//! - `press <key>` / `release <key>` (keys: W, A, S, D)
+//! - `press <key>` / `release <key>` (keys: W, A, S, D, F1)
 //! - `screenshot <name>` saves `screenshots/<name>.png`
 //! - `record <name> <seconds> <fps>` saves `screenshots/<name>-000.png`, ...
 //! - `exit`
@@ -197,6 +197,7 @@ fn parse_key(name: &str) -> Option<KeyCode> {
 		"A" => Some(KeyCode::KeyA),
 		"S" => Some(KeyCode::KeyS),
 		"D" => Some(KeyCode::KeyD),
+		"F1" => Some(KeyCode::F1),
 		_ => None,
 	}
 }
