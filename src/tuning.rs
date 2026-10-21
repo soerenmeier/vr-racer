@@ -76,10 +76,7 @@ fn save(world: &World) -> Result<(), String> {
 	fs::write(TUNING_FILE, text).map_err(|error| error.to_string())
 }
 
-fn attach_to_driver_camera(
-	add: On<Add<DriverCamera>>,
-	mut commands: Commands,
-) {
+fn attach_to_driver_camera(add: On<Add<DriverCamera>>, mut commands: Commands) {
 	commands.entity(add.entity).insert(PrimaryEguiContext);
 }
 
