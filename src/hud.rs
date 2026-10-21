@@ -39,9 +39,9 @@ const INFO_SCREEN: Panel = Panel {
 /// windscreen.
 const HEAD_UP: Panel = Panel {
 	center: Vec3::new(-0.335, 1.06, -0.5),
-	size: Vec2::new(0.16, 0.04),
+	size: Vec2::new(0.22, 0.04),
 	tilt: 0.0,
-	pixels: UVec2::new(640, 160),
+	pixels: UVec2::new(880, 160),
 	background: Color::NONE,
 	font_size: 88.0,
 	text_color: Color::srgb(0.6, 1.0, 0.8),

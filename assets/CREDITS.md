@@ -15,4 +15,5 @@
   Source: https://sketchfab.com/3d-models/toyota-hilux-revo-37c57ebdccbb448e96050f9a75dd0477
 
 The traffic models were reduced to about 50k triangles, scaled to metres,
-centred and turned to face -Z in Blender.
+centred and turned to face -Z in Blender with
+`tools/convert_traffic_car.py`.

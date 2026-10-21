@@ -66,6 +66,16 @@ Turn a recording into one image you can look at, or a video for the user:
 
 The game must not already be running, or cargo can't replace the exe.
 
+## Models and tools
+
+- `tools/convert_traffic_car.py` (run with Blender) turns a downloaded car
+  into a traffic model: reduced to ~50k triangles, in metres, facing -Z,
+  with separate wheel nodes. Usage is at the top of the file. Download the
+  glTF version on Sketchfab, check a screenshot that the car faces away
+  from you, and add the author to `assets/CREDITS.md`.
+- `tools/measure_cockpit.py` finds points in the cockpit in car space by
+  casting rays through screenshot pixels, for placing things in the car.
+
 ## Building
 
 - Local development: `cargo run --features dev`
