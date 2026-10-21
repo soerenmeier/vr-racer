@@ -37,15 +37,15 @@ impl Plugin for CarPlugin {
 }
 
 #[derive(Component)]
-struct Car;
+pub struct Car;
 
 /// What the driver is doing. Throttle and brake go from 0 to 1, steer
 /// from -1 (full left) to 1 (full right).
 #[derive(Component, Default)]
-struct CarInput {
-	throttle: f32,
-	brake: f32,
-	steer: f32,
+pub struct CarInput {
+	pub throttle: f32,
+	pub brake: f32,
+	pub steer: f32,
 }
 
 /// A steering wheel node of the model, with where it sits when centred.

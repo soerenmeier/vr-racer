@@ -26,6 +26,9 @@ const ASPHALT_COLOR: Color = Color::srgb(0.18, 0.18, 0.2);
 const LINE_COLOR: Color = Color::srgb(0.9, 0.9, 0.9);
 const RAIL_COLOR: Color = Color::srgb(0.6, 0.62, 0.65);
 
+#[derive(Component)]
+pub struct GuardRail;
+
 /// Lane 0 is the right lane, the highest is the left (overtaking) lane.
 pub fn lane_x(lane: usize) -> f32 {
 	(lane as f32 - (LANES - 1) as f32 / 2.0) * -LANE_WIDTH
@@ -125,6 +128,7 @@ fn spawn_rails(
 		let (rail, transform) =
 			along_road(RAIL_THICKNESS, RAIL_HEIGHT, x, RAIL_HEIGHT / 2.0);
 		commands.spawn((
+			GuardRail,
 			RigidBody::Static,
 			Collider::cuboid(rail.size().x, rail.size().y, rail.size().z),
 			Mesh3d(meshes.add(rail)),

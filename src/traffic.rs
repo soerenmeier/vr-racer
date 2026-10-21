@@ -5,6 +5,7 @@ use avian3d::prelude::*;
 use bevy::prelude::*;
 
 use crate::highway::{LANES, ROAD_LENGTH, lane_x};
+use crate::race::RaceState;
 
 struct TrafficModel {
 	path: &'static str,
@@ -32,19 +33,29 @@ const MODELS: [TrafficModel; 3] = [
 const LANE_SPEEDS: [f32; LANES] = [80.0, 100.0, 120.0];
 const CARS_PER_LANE: usize = 320;
 /// Distance from the start to the first car.
-const FIRST_CAR: f32 = 60.0;
+const FIRST_CAR: f32 = 10.0;
+/// Traffic sets off together with the player, from standing still.
+const ACCELERATION: f32 = 3.0;
 
 pub struct TrafficPlugin;
 
 impl Plugin for TrafficPlugin {
 	fn build(&self, app: &mut App) {
-		app.add_systems(Startup, spawn_traffic)
-			.add_systems(FixedUpdate, remove_at_road_end);
+		app.add_systems(Startup, spawn_traffic).add_systems(
+			FixedUpdate,
+			(
+				accelerate.run_if(in_state(RaceState::Racing)),
+				remove_at_road_end,
+			),
+		);
 	}
 }
 
 #[derive(Component)]
-struct TrafficCar;
+pub struct TrafficCar {
+	/// The speed of its lane in m/s.
+	speed: f32,
+}
 
 fn spawn_traffic(mut commands: Commands, asset_server: Res<AssetServer>) {
 	let scenes = MODELS.map(|model| {
@@ -61,9 +72,8 @@ fn spawn_traffic(mut commands: Commands, asset_server: Res<AssetServer>) {
 			let z = -(FIRST_CAR + (i as f32 + lane as f32 / 3.0) * spacing);
 
 			commands.spawn((
-				TrafficCar,
+				TrafficCar { speed: speed / 3.6 },
 				RigidBody::Kinematic,
-				LinearVelocity(Vec3::NEG_Z * speed / 3.6),
 				Collider::compound(vec![(
 					Vec3::Y * size.y / 2.0,
 					Quat::IDENTITY,
@@ -74,6 +84,18 @@ fn spawn_traffic(mut commands: Commands, asset_server: Res<AssetServer>) {
 				WorldAssetRoot(scenes[model].clone()),
 			));
 		}
+	}
+}
+
+/// All cars speed up at the same rate, so the gaps in a lane stay the same.
+fn accelerate(
+	time: Res<Time>,
+	mut cars: Query<(&mut LinearVelocity, &TrafficCar)>,
+) {
+	for (mut velocity, car) in &mut cars {
+		let speed =
+			(-velocity.z + ACCELERATION * time.delta_secs()).min(car.speed);
+		velocity.z = -speed;
 	}
 }
 

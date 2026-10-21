@@ -1,6 +1,8 @@
 mod camera;
 mod car;
 mod highway;
+mod hud;
+mod race;
 mod script;
 mod traffic;
 
@@ -14,6 +16,8 @@ fn main() {
 			PhysicsPlugins::default(),
 			highway::HighwayPlugin,
 			traffic::TrafficPlugin,
+			race::RacePlugin,
+			hud::HudPlugin,
 			car::CarPlugin,
 			camera::CameraPlugin,
 			script::ScriptPlugin,

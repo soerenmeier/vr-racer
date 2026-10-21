@@ -93,6 +93,8 @@ pub(super) fn chassis() -> impl Bundle {
 		NoAutoCenterOfMass,
 		NoAutoAngularInertia,
 		TransformInterpolation,
+		// So the race can count hits.
+		CollisionEventsEnabled,
 		// On the chassis itself rather than a child, so the wheel rays can
 		// skip it by excluding the chassis entity.
 		Collider::compound(vec![(
