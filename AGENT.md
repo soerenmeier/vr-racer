@@ -73,6 +73,8 @@ The game must not already be running, or cargo can't replace the exe.
   with separate wheel nodes. Usage is at the top of the file. Download the
   glTF version on Sketchfab, check a screenshot that the car faces away
   from you, and add the author to `assets/CREDITS.md`.
+- `cargo run --example input_probe` logs a controller's raw axes and
+  buttons, to see how a wheel or pedals map (see `src/car/input.rs`).
 - `tools/measure_cockpit.py` finds points in the cockpit in car space by
   casting rays through screenshot pixels, for placing things in the car.
 

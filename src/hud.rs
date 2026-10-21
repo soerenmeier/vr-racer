@@ -7,7 +7,7 @@ use bevy::camera::RenderTarget;
 use bevy::prelude::*;
 use bevy::render::render_resource::TextureFormat;
 
-use crate::car::Car;
+use crate::car::{Car, THRUSTMASTER};
 use crate::race::{RaceState, Score};
 
 struct Panel {
@@ -179,8 +179,15 @@ fn update_head_up(
 	mut text: Single<&mut Text, With<HeadUpText>>,
 	velocity: Single<&LinearVelocity, With<Car>>,
 	state: Res<State<RaceState>>,
+	gamepads: Query<&Gamepad>,
 ) {
-	text.0 = if *state.get() == RaceState::Grid {
+	let wheel = gamepads
+		.iter()
+		.any(|gamepad| gamepad.vendor_id() == Some(THRUSTMASTER));
+
+	text.0 = if *state.get() == RaceState::Grid && wheel {
+		"Gas to start".to_string()
+	} else if *state.get() == RaceState::Grid {
 		"Press W to start".to_string()
 	} else {
 		format!("{:.0} km/h", velocity.length() * 3.6)

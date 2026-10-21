@@ -1,12 +1,12 @@
+mod input;
 mod physics;
+
+pub use input::THRUSTMASTER;
 
 use std::f32::consts::PI;
 
 use bevy::prelude::*;
 use bevy::world_serialization::WorldInstanceReady;
-
-/// How fast keyboard steering moves towards full lock, per second.
-const KEYBOARD_STEER_RATE: f32 = 2.5;
 
 const MODEL: &str = "models/porsche_911.glb";
 /// The model's own root nodes shrink it to 1% and turn it backwards, so
@@ -32,7 +32,11 @@ impl Plugin for CarPlugin {
 		app.add_plugins(physics::CarPhysicsPlugin)
 			.add_systems(Startup, spawn_car)
 			.add_observer(find_steering_wheel)
-			.add_systems(Update, (read_keyboard, turn_steering_wheel).chain());
+			.add_observer(input::configure_wheel)
+			.add_systems(
+				Update,
+				(input::read_controls, turn_steering_wheel).chain(),
+			);
 	}
 }
 
@@ -106,22 +110,6 @@ fn find_steering_wheel(
 				rest: transform.translation,
 			});
 		}
-	}
-}
-
-fn read_keyboard(
-	keys: Res<ButtonInput<KeyCode>>,
-	time: Res<Time>,
-	mut inputs: Query<&mut CarInput>,
-) {
-	let pressed = |key| if keys.pressed(key) { 1.0 } else { 0.0 };
-	let target_steer = pressed(KeyCode::KeyD) - pressed(KeyCode::KeyA);
-	let step = KEYBOARD_STEER_RATE * time.delta_secs();
-
-	for mut input in &mut inputs {
-		input.throttle = pressed(KeyCode::KeyW);
-		input.brake = pressed(KeyCode::KeyS);
-		input.steer += (target_steer - input.steer).clamp(-step, step);
 	}
 }
 
