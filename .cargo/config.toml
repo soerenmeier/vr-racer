@@ -1,0 +1,6 @@
+[env]
+# The OpenXR loader is built from source and needs CMake. This one comes
+# with Visual Studio 2019, which also has the C++ compiler for it.
+# Variables set in the environment win.
+CMAKE = { value = 'C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe', force = false }
+CMAKE_GENERATOR = { value = 'Visual Studio 16 2019', force = false }

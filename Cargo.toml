@@ -8,6 +8,11 @@ avian3d = "0.8.0"
 bevy = { version = "0.20.0", features = ["jpeg"] }
 bevy-inspector-egui = { version = "0.38.0", features = ["documentation"] }
 bevy_egui = "0.43.1"
+# The Bevy 0.20 port from awtterpip/bevy_oxr#212, pinned. Switch to the
+# crates.io release once it is published.
+bevy_mod_openxr = { git = "https://github.com/MaximilianHausen/bevy_oxr", rev = "ce6799dbca9d80f2a658d39ad6ac4dc58c2fdc0d" }
+bevy_mod_xr = { git = "https://github.com/MaximilianHausen/bevy_oxr", rev = "ce6799dbca9d80f2a658d39ad6ac4dc58c2fdc0d" }
+openxr = "0.22.0"
 ron = "0.12.2"
 serde = { version = "1.0.229", features = ["derive"] }
 

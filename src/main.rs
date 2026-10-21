@@ -8,6 +8,7 @@ mod race;
 mod script;
 mod traffic;
 mod tuning;
+mod vr;
 
 use avian3d::prelude::*;
 use bevy::prelude::*;
@@ -15,7 +16,7 @@ use bevy::prelude::*;
 fn main() {
 	let mut app = App::new();
 	app.add_plugins((
-		DefaultPlugins,
+		vr::default_plugins(),
 		PhysicsPlugins::default(),
 		highway::HighwayPlugin,
 		traffic::TrafficPlugin,
@@ -24,6 +25,7 @@ fn main() {
 		car::CarPlugin,
 		camera::CameraPlugin,
 		script::ScriptPlugin,
+		vr::VrPlugin,
 	));
 
 	#[cfg(windows)]

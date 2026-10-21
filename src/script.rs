@@ -22,6 +22,12 @@ use bevy::time::TimeUpdateStrategy;
 const OUTPUT_DIR: &str = "screenshots";
 const FRAME_TIME: Duration = Duration::from_nanos(1_000_000_000 / 60);
 
+/// Whether the game was started with a script. Scripted test runs leave
+/// the wheel and headset alone.
+pub fn is_scripted() -> bool {
+	std::env::args().any(|arg| arg == "--script")
+}
+
 pub struct ScriptPlugin;
 
 impl Plugin for ScriptPlugin {

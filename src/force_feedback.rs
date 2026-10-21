@@ -20,6 +20,7 @@ use windows::Win32::System::WinRT::{RO_INIT_MULTITHREADED, RoInitialize};
 use windows_numerics::Vector3;
 
 use crate::car::{Car, SteeringTorque, THRUSTMASTER};
+use crate::script;
 
 /// On the T300, a positive force turns the wheel left.
 const FORCE_TO_TURN_RIGHT: f32 = -1.0;
@@ -77,7 +78,7 @@ impl Plugin for ForceFeedbackPlugin {
 			.register_type::<ForceFeedbackTuning>();
 
 		// Scripted test runs shouldn't turn the wheel of whoever sits at it.
-		if std::env::args().any(|arg| arg == "--script") {
+		if script::is_scripted() {
 			return;
 		}
 

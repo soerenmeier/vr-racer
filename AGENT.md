@@ -88,3 +88,7 @@ The game must not already be running, or cargo can't replace the exe.
 
 - Local development: `cargo run --features dev`
 - Release: `cargo build --release` (never with the `dev` feature)
+- VR uses OpenXR (`src/vr.rs`). Start Meta Quest Link before the game;
+  without a headset it runs on the monitor. Scripted runs never use VR or
+  force feedback. Building the OpenXR loader needs CMake, set up in
+  `.cargo/config.toml`.

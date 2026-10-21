@@ -13,6 +13,7 @@ use bevy_inspector_egui::DefaultInspectorConfigPlugin;
 use bevy_inspector_egui::bevy_inspector::ui_for_resource;
 use serde::{Deserialize, Serialize};
 
+use crate::camera::DriverCamera;
 use crate::car::{Car, CarInput, CarTuning, SteeringTorque};
 #[cfg(windows)]
 use crate::force_feedback::{ForceFeedbackTuning, wheel_force};
@@ -36,8 +37,9 @@ impl Plugin for TuningPlugin {
 		let tuning = load();
 
 		app.add_plugins((EguiPlugin::default(), DefaultInspectorConfigPlugin))
-			// The UI cameras that draw the cockpit displays come first, so
-			// pick the driver's camera for the panel by hand.
+			// The UI cameras that draw the cockpit displays come first, and
+			// in VR there are eye cameras too, so pick the monitor's camera
+			// for the panel by hand.
 			.insert_resource(EguiGlobalSettings {
 				auto_create_primary_context: false,
 				..default()
@@ -74,7 +76,10 @@ fn save(world: &World) -> Result<(), String> {
 	fs::write(TUNING_FILE, text).map_err(|error| error.to_string())
 }
 
-fn attach_to_driver_camera(add: On<Add<Camera3d>>, mut commands: Commands) {
+fn attach_to_driver_camera(
+	add: On<Add<DriverCamera>>,
+	mut commands: Commands,
+) {
 	commands.entity(add.entity).insert(PrimaryEguiContext);
 }
 
