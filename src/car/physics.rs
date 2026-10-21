@@ -34,9 +34,6 @@ const LOW_SPEED: f32 = 3.0;
 
 const DRIVE_FORCE: f32 = 8000.0;
 const ENGINE_POWER: f32 = 330_000.0;
-const REVERSE_FORCE: f32 = 3000.0;
-/// Below this forward speed, the brake pedal reverses instead.
-const REVERSE_BELOW_SPEED: f32 = 1.0;
 const BRAKE_FORCE: f32 = 16_000.0;
 const ROLLING_RESISTANCE: f32 = 0.015;
 /// Brakes and rolling resistance fade out below this speed, so they stop
@@ -116,7 +113,7 @@ fn apply_wheel_forces(
 
 		let forward_speed =
 			forces.linear_velocity().dot(rotation * Vec3::NEG_Z);
-		let (drive, brake) = pedals(input, forward_speed);
+		let drive = input.throttle * drive_force(forward_speed);
 
 		for wheel in &WHEELS {
 			let mount = forces.position() + rotation * wheel.mount;
@@ -148,7 +145,7 @@ fn apply_wheel_forces(
 
 			let mut longitudinal = opposing(
 				forward_velocity,
-				brake * BRAKE_FORCE / WHEELS.len() as f32
+				input.brake * BRAKE_FORCE / WHEELS.len() as f32
 					+ ROLLING_RESISTANCE * load,
 			);
 			if wheel.driven {
@@ -172,17 +169,10 @@ fn apply_wheel_forces(
 	}
 }
 
-/// Turns the pedals into a total drive force and a brake amount (0 to 1).
-/// The brake pedal reverses once the car has almost stopped.
-fn pedals(input: &CarInput, forward_speed: f32) -> (f32, f32) {
-	if input.brake > 0.0 && forward_speed < REVERSE_BELOW_SPEED {
-		return (-input.brake * REVERSE_FORCE, 0.0);
-	}
-
-	// The engine's power limits the force at speed.
-	let drive = DRIVE_FORCE.min(ENGINE_POWER / forward_speed.max(1.0));
-
-	(input.throttle * drive, input.brake)
+/// The engine's full-throttle drive force. Its power limits the force at
+/// speed.
+fn drive_force(forward_speed: f32) -> f32 {
+	DRIVE_FORCE.min(ENGINE_POWER / forward_speed.max(1.0))
 }
 
 /// Spring and damper force pushing the chassis up. A spring can only push.
@@ -236,9 +226,9 @@ mod tests {
 	}
 
 	#[test]
-	fn brake_reverses_only_when_stopped() {
-		assert_eq!(pedals(&input(0.0, 1.0), 10.0), (0.0, 1.0));
-		assert_eq!(pedals(&input(0.0, 1.0), 0.0), (-REVERSE_FORCE, 0.0));
+	fn engine_power_limits_drive_at_speed() {
+		assert_eq!(drive_force(0.0), DRIVE_FORCE);
+		assert_eq!(drive_force(100.0), ENGINE_POWER / 100.0);
 	}
 
 	#[test]
